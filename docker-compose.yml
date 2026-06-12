@@ -1,0 +1,49 @@
+# Docker Compose configuration for the coffee shop microservices prototype.
+# Defines three containerized microservices and an ISOLATED network so they
+# communicate with each other without any internet access.
+
+services:
+
+  # Payment service: request-reply server (ZeroMQ REP).
+  payment:
+    build: ./payment
+    container_name: payment
+    environment:
+      - PAYMENT_PORT=5555
+    networks:
+      - coffee-net
+
+  # Ordering service: orchestrator. Request-reply client to payment (REQ)
+  # and publisher of order events (PUB).
+  ordering:
+    build: ./ordering
+    container_name: ordering
+    environment:
+      - PAYMENT_HOST=payment
+      - PAYMENT_PORT=5555
+      - PUB_PORT=5556
+    depends_on:
+      - payment
+    networks:
+      - coffee-net
+
+  # Subscriber service: publish-subscribe consumer (SUB), stands in for the
+  # Notify / Analytics consumers in the design.
+  subscriber:
+    build: ./subscriber
+    container_name: subscriber
+    environment:
+      - ORDERING_HOST=ordering
+      - PUB_PORT=5556
+      - TOPIC=orders
+    depends_on:
+      - ordering
+    networks:
+      - coffee-net
+
+# Isolated network. "internal: true" means it has no route to the outside
+# world; the services can reach each other by name but not the internet.
+networks:
+  coffee-net:
+    driver: bridge
+    internal: true
