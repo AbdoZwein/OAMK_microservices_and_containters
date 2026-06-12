@@ -1,0 +1,101 @@
+# Docker Compose configuration for the Coffee Shop microservices application.
+#
+# Networks:
+#   backend  -> ISOLATED internal network (internal: true), no internet access.
+#               All backend services talk to each other here by service name.
+#   edge     -> a normal network used ONLY to expose the frontend and gateway
+#               to the user's browser on the host machine.
+#
+# Databases: Ordering and Payment each have their own SQLite database stored on
+# their own named volume (Split Tables / database-per-service pattern).
+
+services:
+
+  # ---- Frontend (widget-based fragmented UI) ----
+  frontend:
+    build: { context: ., dockerfile: frontend/Dockerfile }
+    container_name: frontend
+    environment:
+      - GATEWAY_PUBLIC=http://localhost:8080
+    ports:
+      - "8000:8000"          # open the UI at http://localhost:8000
+    networks: [edge, backend]
+    depends_on: [gateway]
+
+  # ---- API Gateway (single entry point) ----
+  gateway:
+    build: { context: ., dockerfile: gateway/Dockerfile }
+    container_name: gateway
+    environment:
+      - CATALOG_URL=http://catalog:5001
+      - ORDERING_URL=http://ordering:5003
+      - MONITOR_BASE=http://monitoring:6000
+      - MONITOR_URL=http://monitoring:6000/logs
+      - AUTH_URL=http://auth:5004
+    ports:
+      - "8080:8080"          # browser calls the gateway here
+    networks: [edge, backend]
+    depends_on: [catalog, ordering, monitoring, auth]
+
+  # ---- Catalog service ----
+  catalog:
+    build: { context: ., dockerfile: catalog/Dockerfile }
+    container_name: catalog
+    environment:
+      - MONITOR_URL=http://monitoring:6000/logs
+    networks: [backend]
+    depends_on: [monitoring]
+
+  # ---- Payment service (own database) ----
+  payment:
+    build: { context: ., dockerfile: payment/Dockerfile }
+    container_name: payment
+    environment:
+      - PAYMENT_DB=/data/payment.db
+      - MONITOR_URL=http://monitoring:6000/logs
+    volumes:
+      - payment-data:/data    # Payment's own database volume
+    networks: [backend]
+    depends_on: [monitoring]
+
+  # ---- Ordering service (orchestrator, own database) ----
+  ordering:
+    build: { context: ., dockerfile: ordering/Dockerfile }
+    container_name: ordering
+    environment:
+      - ORDER_DB=/data/order.db
+      - PAYMENT_URL=http://payment:5002/capture
+      - MONITOR_URL=http://monitoring:6000/logs
+      - MONITOR_EVENTS=http://monitoring:6000/events
+    volumes:
+      - order-data:/data      # Ordering's own database volume
+    networks: [backend]
+    depends_on: [payment, monitoring]
+
+  # ---- Auth service (login + token verification) ----
+  auth:
+    build: { context: ., dockerfile: auth/Dockerfile }
+    container_name: auth
+    environment:
+      - AUTH_SECRET=dev-secret-change-me
+      - TOKEN_TTL=3600
+      - MONITOR_URL=http://monitoring:6000/logs
+    networks: [backend]
+    depends_on: [monitoring]
+
+  # ---- Monitoring service (central logs + events) ----
+  monitoring:
+    build: { context: ., dockerfile: monitoring/Dockerfile }
+    container_name: monitoring
+    networks: [backend]
+
+networks:
+  backend:
+    driver: bridge
+    internal: true            # isolated: no internet access
+  edge:
+    driver: bridge
+
+volumes:
+  order-data:
+  payment-data:
