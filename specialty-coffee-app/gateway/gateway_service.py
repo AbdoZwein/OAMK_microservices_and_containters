@@ -26,6 +26,24 @@ MONITOR_URL2 = os.environ.get("MONITOR_BASE", "http://monitoring:6000")
 AUTH_URL = os.environ.get("AUTH_URL", "http://auth:5004")
 
 
+# The UI page is served by the frontend (port 8000) but calls the gateway
+# (port 8080), so browser requests are cross-origin. Allow them and answer the
+# preflight OPTIONS request the browser sends before POSTs with a JSON body or
+# an Authorization header.
+@app.after_request
+def add_cors_headers(resp):
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return resp
+
+
+@app.before_request
+def handle_preflight():
+    if request.method == "OPTIONS":
+        return Response(status=204)
+
+
 def proxy_get(url):
     with urllib.request.urlopen(url, timeout=3) as r:
         return r.read(), r.status
