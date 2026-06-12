@@ -34,7 +34,7 @@ def _post(path, payload, token=None):
         return json.loads(r.read()), r.status
 
 
-def _login(username="alice", password="coffee123"):
+def _login(username="ubuntu", password="admin123"):
     body, _ = _post("/api/login", {"username": username, "password": password})
     return body["token"]
 

@@ -53,60 +53,78 @@ PAGE = """<!DOCTYPE html>
   .Paid { background: #dcfce7; color: #166534; }
   .PaymentFailed, .PaymentError { background: #fee2e2; color: #991b1b; }
   .AwaitingPayment { background: #fef3c7; color: #92400e; }
-  #loginMsg { font-size: 12px; color: #991b1b; min-height: 14px; }
+  /* Auth gate: a full-screen login shown before the app is revealed. */
+  #gate { position: fixed; inset: 0; background: #f8fafc; display: flex;
+          align-items: center; justify-content: center; }
+  #gate .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+                padding: 28px; width: 320px; box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+  #gate h2 { margin: 0 0 4px; color: #92400e; font-size: 20px; }
+  #gate p.sub { margin: 0 0 18px; color: #64748b; font-size: 13px; }
+  #gate input { width: 100%; box-sizing: border-box; padding: 9px 11px; font-size: 14px;
+                margin-bottom: 10px; }
+  #gate button { width: 100%; padding: 9px; font-size: 14px; }
+  #loginMsg { font-size: 12px; color: #991b1b; min-height: 14px; margin-top: 6px; }
+  #app { display: none; }   /* hidden until a successful login */
 </style>
 </head>
 <body>
-<header>
-  <h1>Specialty Coffee Shop</h1>
-  <div id="userbar"><span id="who">Not logged in</span></div>
-</header>
-<div class="widgets">
 
-  <!-- Login widget: owned by the auth service -->
-  <div class="widget" id="login-widget">
-    <h2>Login</h2>
-    <div id="loginForm">
-      <div style="margin-bottom:8px;">
-        <input id="username" placeholder="username" value="alice" />
-      </div>
-      <div style="margin-bottom:8px;">
-        <input id="password" type="password" placeholder="password" value="coffee123" />
-      </div>
-      <button onclick="login()">Log in</button>
-      <div id="loginMsg"></div>
-      <div style="font-size:11px;color:#94a3b8;margin-top:8px;">
-        Demo users: alice / coffee123, bob / espresso
-      </div>
+<!-- Auth gate: the first and only thing shown until login succeeds. -->
+<div id="gate">
+  <div class="card">
+    <h2>Specialty Coffee Shop</h2>
+    <p class="sub">Please log in to continue</p>
+    <input id="username" placeholder="username" value="ubuntu"
+           onkeydown="if(event.key==='Enter')login()" />
+    <input id="password" type="password" placeholder="password" value="admin123"
+           onkeydown="if(event.key==='Enter')login()" />
+    <button onclick="login()">Log in</button>
+    <div id="loginMsg"></div>
+    <div style="font-size:11px;color:#94a3b8;margin-top:10px;">
+      Demo users: ubuntu / admin123, abdo / admin123
     </div>
   </div>
+</div>
 
-  <!-- Catalog widget: owned by the catalog service -->
-  <div class="widget" id="catalog-widget">
-    <h2>Catalog</h2>
-    <div id="catalog">Loading...</div>
+<!-- The application: revealed only after authentication. -->
+<div id="app">
+  <header>
+    <h1>Specialty Coffee Shop</h1>
+    <div id="userbar">
+      <span id="who"></span>
+      <button onclick="logout()">Log out</button>
+    </div>
+  </header>
+  <div class="widgets">
+
+    <!-- Catalog widget: owned by the catalog service -->
+    <div class="widget" id="catalog-widget">
+      <h2>Catalog</h2>
+      <div id="catalog">Loading...</div>
+    </div>
+
+    <!-- Orders widget: owned by the ordering service -->
+    <div class="widget" id="orders-widget">
+      <h2>Recent Orders</h2>
+      <div id="orders">Loading...</div>
+    </div>
+
+    <!-- Monitoring widget: owned by the monitoring service -->
+    <div class="widget" id="monitor-widget">
+      <h2>Monitoring</h2>
+      <div id="metrics">Loading...</div>
+    </div>
+
   </div>
-
-  <!-- Orders widget: owned by the ordering service -->
-  <div class="widget" id="orders-widget">
-    <h2>Recent Orders</h2>
-    <div id="orders">Loading...</div>
-  </div>
-
-  <!-- Monitoring widget: owned by the monitoring service -->
-  <div class="widget" id="monitor-widget">
-    <h2>Monitoring</h2>
-    <div id="metrics">Loading...</div>
-  </div>
-
 </div>
 
 <script>
 const GW = "__GATEWAY__";
 let token = null;          // auth token, set after login
 let username = null;
+let refreshTimer = null;
 
-// --- Login widget logic (auth) ---
+// --- Auth gate logic ---
 async function login() {
   const u = document.getElementById("username").value;
   const p = document.getElementById("password").value;
@@ -121,8 +139,25 @@ async function login() {
   const data = await res.json();
   token = data.token;
   username = data.username;
+  showApp();
+}
+
+function showApp() {
+  document.getElementById("gate").style.display = "none";
+  document.getElementById("app").style.display = "block";
   document.getElementById("who").textContent = "Logged in as " + username;
-  loadCatalog();   // re-render so Order buttons enable
+  // The app widgets each load their own data once authenticated.
+  loadCatalog(); loadOrders(); loadMetrics();
+  refreshTimer = setInterval(() => { loadOrders(); loadMetrics(); }, 4000);
+}
+
+function logout() {
+  token = null; username = null;
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  document.getElementById("app").style.display = "none";
+  document.getElementById("gate").style.display = "flex";
+  document.getElementById("password").value = "";
+  document.getElementById("loginMsg").textContent = "";
 }
 
 function loggedIn() { return token !== null; }
@@ -133,7 +168,7 @@ async function loadCatalog() {
   const items = await res.json();
   document.getElementById("catalog").innerHTML = items.map(p =>
     `<div class="product"><span>${p.name} &mdash; &euro;${p.price.toFixed(2)}</span>
-     <button ${loggedIn() ? "" : "disabled"} onclick="order('${p.productId}', ${p.price})">Order</button></div>`
+     <button onclick="order('${p.productId}', ${p.price})">Order</button></div>`
   ).join("");
 }
 
@@ -148,7 +183,7 @@ async function order(productId, price) {
     },
     body: JSON.stringify({ productId, qty: 1, price })
   });
-  if (res.status === 401) { alert("Please log in first."); return; }
+  if (res.status === 401) { alert("Session expired. Please log in again."); logout(); return; }
   loadOrders();
   loadMetrics();
 }
@@ -176,10 +211,6 @@ async function loadMetrics() {
      <div class="metric"><span>Log entries</span><b>${m.logCount}</b></div>
      <div class="metric"><span>Errors</span><b>${m.errors}</b></div>`;
 }
-
-// Each widget loads independently.
-loadCatalog(); loadOrders(); loadMetrics();
-setInterval(() => { loadOrders(); loadMetrics(); }, 4000);
 </script>
 </body>
 </html>

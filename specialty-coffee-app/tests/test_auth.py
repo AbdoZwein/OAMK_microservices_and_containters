@@ -20,14 +20,14 @@ import auth_service
 
 def test_login_success():
     client = auth_service.app.test_client()
-    resp = client.post("/login", json={"username": "alice", "password": "coffee123"})
+    resp = client.post("/login", json={"username": "ubuntu", "password": "admin123"})
     assert resp.status_code == 200
     assert "token" in resp.get_json()
 
 
 def test_login_wrong_password():
     client = auth_service.app.test_client()
-    resp = client.post("/login", json={"username": "alice", "password": "wrong"})
+    resp = client.post("/login", json={"username": "ubuntu", "password": "wrong"})
     assert resp.status_code == 401
 
 
@@ -39,16 +39,16 @@ def test_login_unknown_user():
 
 def test_verify_valid_token():
     client = auth_service.app.test_client()
-    token = client.post("/login", json={"username": "bob", "password": "espresso"}).get_json()["token"]
+    token = client.post("/login", json={"username": "abdo", "password": "admin123"}).get_json()["token"]
     resp = client.post("/verify", json={"token": token})
     assert resp.status_code == 200
     assert resp.get_json()["valid"] is True
-    assert resp.get_json()["sub"] == "bob"
+    assert resp.get_json()["sub"] == "abdo"
 
 
 def test_verify_tampered_token():
     client = auth_service.app.test_client()
-    token = client.post("/login", json={"username": "alice", "password": "coffee123"}).get_json()["token"]
+    token = client.post("/login", json={"username": "ubuntu", "password": "admin123"}).get_json()["token"]
     tampered = token[:-2] + ("aa" if not token.endswith("aa") else "bb")
     resp = client.post("/verify", json={"token": tampered})
     assert resp.status_code == 401

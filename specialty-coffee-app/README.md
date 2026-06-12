@@ -76,8 +76,9 @@ Then open the UI:
 http://localhost:8000
 ```
 
-Log in first using the Login widget (demo users: alice / coffee123, or
-bob / espresso). Then click "Order" on a product. The order is placed through
+Log in first on the auth gate (demo users: ubuntu / admin123, or
+abdo / admin123). The app is revealed only after a successful login. Then
+click "Order" on a product. The order is placed through
 the gateway (which checks the token), paid via the ordering -> payment
 orchestration, stored in the databases, and the Recent Orders and Monitoring
 widgets update.
