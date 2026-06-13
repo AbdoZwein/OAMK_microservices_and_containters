@@ -34,7 +34,7 @@ AUTH_URL = os.environ.get("AUTH_URL", "http://auth:5004")
 def add_cors_headers(resp):
     resp.headers["Access-Control-Allow-Origin"] = "*"
     resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    resp.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     return resp
 
 
@@ -52,6 +52,15 @@ def proxy_get(url):
 def proxy_post(url, payload):
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data,
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return r.read(), r.status
+
+
+def proxy(method, url, payload=None):
+    """Forward an arbitrary method (POST/PUT/DELETE) to a backend service."""
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    req = urllib.request.Request(url, data=data, method=method,
                                  headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=5) as r:
         return r.read(), r.status
@@ -95,10 +104,33 @@ def login():
         return Response(e.read(), status=e.code, mimetype="application/json")
 
 
-# --- Catalog routes (public) ---
-@app.route("/api/products")
+# --- Catalog routes ---
+# Listing is public; adding/editing/removing products requires a valid token.
+@app.route("/api/products", methods=["GET", "POST"])
 def products():
+    if request.method == "POST":
+        if not token_is_valid(bearer_token()):
+            log(SERVICE, "catalog change rejected: unauthorized", level="WARN")
+            return jsonify({"error": "unauthorized"}), 401
+        try:
+            body, status = proxy("POST", CATALOG_URL + "/products", request.get_json(force=True))
+        except urllib.error.HTTPError as e:
+            return Response(e.read(), status=e.code, mimetype="application/json")
+        return Response(body, status=status, mimetype="application/json")
     body, status = proxy_get(CATALOG_URL + "/products")
+    return Response(body, status=status, mimetype="application/json")
+
+
+@app.route("/api/products/<product_id>", methods=["PUT", "DELETE"])
+def product_item(product_id):
+    if not token_is_valid(bearer_token()):
+        log(SERVICE, "catalog change rejected: unauthorized", level="WARN")
+        return jsonify({"error": "unauthorized"}), 401
+    payload = request.get_json(force=True) if request.method == "PUT" else None
+    try:
+        body, status = proxy(request.method, CATALOG_URL + "/products/" + product_id, payload)
+    except urllib.error.HTTPError as e:
+        return Response(e.read(), status=e.code, mimetype="application/json")
     return Response(body, status=status, mimetype="application/json")
 
 

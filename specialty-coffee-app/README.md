@@ -25,12 +25,14 @@ in the course (DDD model, communication patterns, migration plan, test plan).
   own data independently through the gateway (UI Composition pattern).
 - **gateway** — single entry point; hides internal structure and routes to
   backend services.
-- **catalog** — product catalog (read), request-reply.
+- **catalog** — product catalog; list products (public) and add/edit/remove
+  products (token-protected), request-reply.
 - **ordering** — orchestrator. Creates orders, calls payment and checks the
   reply, owns its own `order.db`.
 - **payment** — captures payment, owns its own `payment.db`.
 - **monitoring** — collects logs and events from all services centrally and
-  exposes simple metrics.
+  exposes simple metrics, including total revenue from paid orders (shown in
+  the UI as a revenue scorecard).
 - **auth** — login service; issues a signed token and verifies tokens. Order
   placement is protected and requires a valid token.
 
@@ -80,8 +82,9 @@ Log in first on the auth gate (demo users: ubuntu / admin123, or
 abdo / admin123). The app is revealed only after a successful login. Then
 click "Order" on a product. The order is placed through
 the gateway (which checks the token), paid via the ordering -> payment
-orchestration, stored in the databases, and the Recent Orders and Monitoring
-widgets update.
+orchestration, stored in the databases, and the Recent Orders, Monitoring and
+revenue scorecard update. The Catalog widget also lets a logged-in user add,
+edit or remove products (these changes are also token-protected at the gateway).
 
 Stop and clean up:
 

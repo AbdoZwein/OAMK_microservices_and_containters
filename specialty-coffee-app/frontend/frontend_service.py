@@ -39,11 +39,30 @@ PAGE = """<!DOCTYPE html>
   .widget h2 { font-size: 15px; margin: 0 0 10px; color: #92400e;
                border-bottom: 2px solid #fde68a; padding-bottom: 6px; }
   .product { display: flex; justify-content: space-between; align-items: center;
-             padding: 6px 0; border-bottom: 1px solid #f1f5f9; }
+             padding: 6px 0; border-bottom: 1px solid #f1f5f9; gap: 8px; }
+  .product .actions { display: flex; gap: 4px; flex-shrink: 0; }
   button { background: #b45309; color: #fff; border: none; padding: 5px 10px;
            border-radius: 5px; cursor: pointer; font-size: 12px; }
   button:hover { background: #92400e; }
   button:disabled { background: #cbd5e1; cursor: not-allowed; }
+  button.secondary { background: #64748b; }
+  button.secondary:hover { background: #475569; }
+  button.danger { background: #b91c1c; }
+  button.danger:hover { background: #991b1b; }
+  .addform { display: flex; gap: 6px; margin-top: 12px; padding-top: 10px;
+             border-top: 1px dashed #e2e8f0; }
+  .addform input.name { flex: 1; min-width: 0; }
+  .addform input.price { width: 64px; }
+  /* Revenue scorecard */
+  .scorecard { display: flex; gap: 16px; padding: 20px 20px 0; flex-wrap: wrap; }
+  .score { background: #fff; border: 1px solid #e2e8f0; border-radius: 8px;
+           padding: 16px 20px; flex: 1; min-width: 180px; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  .score .label { font-size: 12px; color: #64748b; text-transform: uppercase;
+                  letter-spacing: .5px; }
+  .score .value { font-size: 28px; font-weight: 700; color: #92400e; margin-top: 4px; }
+  .score.primary { background: #b45309; border-color: #b45309; }
+  .score.primary .label { color: #fde68a; }
+  .score.primary .value { color: #fff; }
   input { padding: 5px 7px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 13px; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th, td { text-align: left; padding: 4px 6px; border-bottom: 1px solid #f1f5f9; }
@@ -95,6 +114,22 @@ PAGE = """<!DOCTYPE html>
       <button onclick="logout()">Log out</button>
     </div>
   </header>
+  <!-- Revenue scorecard: KPIs sourced from the monitoring service -->
+  <div class="scorecard" id="scorecard">
+    <div class="score primary">
+      <div class="label">Total Revenue</div>
+      <div class="value" id="kpiRevenue">&euro;0.00</div>
+    </div>
+    <div class="score">
+      <div class="label">Orders Paid</div>
+      <div class="value" id="kpiOrders">0</div>
+    </div>
+    <div class="score">
+      <div class="label">Errors</div>
+      <div class="value" id="kpiErrors">0</div>
+    </div>
+  </div>
+
   <div class="widgets">
 
     <!-- Catalog widget: owned by the catalog service -->
@@ -166,10 +201,66 @@ function loggedIn() { return token !== null; }
 async function loadCatalog() {
   const res = await fetch(GW + "/api/products");
   const items = await res.json();
-  document.getElementById("catalog").innerHTML = items.map(p =>
-    `<div class="product"><span>${p.name} &mdash; &euro;${p.price.toFixed(2)}</span>
-     <button onclick="order('${p.productId}', ${p.price})">Order</button></div>`
+  const rows = items.map(p =>
+    `<div class="product">
+       <span>${p.name} &mdash; &euro;${p.price.toFixed(2)}</span>
+       <span class="actions">
+         <button onclick="order('${p.productId}', ${p.price})">Order</button>
+         <button class="secondary" onclick="editProduct('${p.productId}', ${JSON.stringify(p.name)}, ${p.price})">Edit</button>
+         <button class="danger" onclick="deleteProduct('${p.productId}')">Delete</button>
+       </span>
+     </div>`
   ).join("");
+  // Form to add a new product (owner: catalog service, token-protected).
+  const addForm =
+    `<div class="addform">
+       <input class="name" id="newName" placeholder="New product name" />
+       <input class="price" id="newPrice" type="number" min="0" step="0.5" placeholder="Price" />
+       <button onclick="addProduct()">Add</button>
+     </div>`;
+  document.getElementById("catalog").innerHTML = rows + addForm;
+}
+
+async function addProduct() {
+  const name = document.getElementById("newName").value.trim();
+  const price = parseFloat(document.getElementById("newPrice").value);
+  if (!name || !(price > 0)) { alert("Enter a name and a positive price."); return; }
+  const res = await fetch(GW + "/api/products", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+    body: JSON.stringify({ name, price })
+  });
+  if (res.status === 401) { alert("Session expired. Please log in again."); logout(); return; }
+  if (!res.ok) { alert("Could not add product."); return; }
+  loadCatalog();
+}
+
+async function editProduct(productId, currentName, currentPrice) {
+  const name = prompt("Product name:", currentName);
+  if (name === null) return;
+  const priceStr = prompt("Price (EUR):", currentPrice);
+  if (priceStr === null) return;
+  const price = parseFloat(priceStr);
+  if (!name.trim() || !(price > 0)) { alert("Enter a name and a positive price."); return; }
+  const res = await fetch(GW + "/api/products/" + productId, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + token },
+    body: JSON.stringify({ name: name.trim(), price })
+  });
+  if (res.status === 401) { alert("Session expired. Please log in again."); logout(); return; }
+  if (!res.ok) { alert("Could not update product."); return; }
+  loadCatalog();
+}
+
+async function deleteProduct(productId) {
+  if (!confirm("Remove this product from the catalog?")) return;
+  const res = await fetch(GW + "/api/products/" + productId, {
+    method: "DELETE",
+    headers: { "Authorization": "Bearer " + token }
+  });
+  if (res.status === 401) { alert("Session expired. Please log in again."); logout(); return; }
+  if (!res.ok) { alert("Could not remove product."); return; }
+  loadCatalog();
 }
 
 // Placing an order sends the token; rejected if not logged in.
@@ -205,8 +296,14 @@ async function loadOrders() {
 async function loadMetrics() {
   const res = await fetch(GW + "/api/metrics");
   const m = await res.json();
+  // Revenue scorecard (KPIs).
+  document.getElementById("kpiRevenue").textContent = "€" + (m.revenue || 0).toFixed(2);
+  document.getElementById("kpiOrders").textContent = m.ordersPaid;
+  document.getElementById("kpiErrors").textContent = m.errors;
+  // Detailed monitoring widget.
   document.getElementById("metrics").innerHTML =
-    `<div class="metric"><span>Orders paid</span><b>${m.ordersPaid}</b></div>
+    `<div class="metric"><span>Revenue</span><b>&euro;${(m.revenue || 0).toFixed(2)}</b></div>
+     <div class="metric"><span>Orders paid</span><b>${m.ordersPaid}</b></div>
      <div class="metric"><span>Events collected</span><b>${m.eventCount}</b></div>
      <div class="metric"><span>Log entries</span><b>${m.logCount}</b></div>
      <div class="metric"><span>Errors</span><b>${m.errors}</b></div>`;

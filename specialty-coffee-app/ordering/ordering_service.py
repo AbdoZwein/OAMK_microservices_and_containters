@@ -107,6 +107,7 @@ def create_order():
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
             "orderId": order_id,
             "paymentId": reply.get("paymentId"),
+            "amount": amount,
         })
     else:
         new_status = "PaymentFailed"

@@ -46,12 +46,14 @@ def events():
 def metrics():
     """Simple aggregated metrics from the collected logs/events."""
     errors = sum(1 for l in LOGS if l.get("level") == "ERROR")
-    paid = sum(1 for e in EVENTS if e.get("eventType") == "OrderPaid")
+    paid_events = [e for e in EVENTS if e.get("eventType") == "OrderPaid"]
+    revenue = round(sum(float(e.get("amount", 0)) for e in paid_events), 2)
     return jsonify({
         "logCount": len(LOGS),
         "eventCount": len(EVENTS),
         "errors": errors,
-        "ordersPaid": paid,
+        "ordersPaid": len(paid_events),
+        "revenue": revenue,
     })
 
 

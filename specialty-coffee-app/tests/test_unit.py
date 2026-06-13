@@ -64,3 +64,31 @@ def test_catalog_lists_products():
     products = client.get("/products").get_json()
     assert len(products) >= 1
     assert "productId" in products[0]
+
+
+# --- Catalog add/edit/delete round-trip ---
+def test_catalog_add_edit_delete():
+    client = catalog_service.app.test_client()
+
+    # Add: a valid product is created and returned with an id.
+    created = client.post("/products", json={"name": "Brazil Santos", "price": 14.0})
+    assert created.status_code == 201
+    pid = created.get_json()["productId"]
+
+    # Edit: the price is updated.
+    edited = client.put("/products/" + pid, json={"price": 15.5})
+    assert edited.status_code == 200
+    assert edited.get_json()["price"] == 15.5
+
+    # Delete: the product is removed and no longer listed.
+    deleted = client.delete("/products/" + pid)
+    assert deleted.status_code == 200
+    ids = [p["productId"] for p in client.get("/products").get_json()]
+    assert pid not in ids
+
+
+# --- Boundary: adding without a positive price is rejected ---
+def test_catalog_add_requires_valid_price():
+    client = catalog_service.app.test_client()
+    resp = client.post("/products", json={"name": "No Price", "price": 0})
+    assert resp.status_code == 400
