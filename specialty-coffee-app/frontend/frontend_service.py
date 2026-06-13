@@ -182,8 +182,8 @@ function showApp() {
   document.getElementById("app").style.display = "block";
   document.getElementById("who").textContent = "Logged in as " + username;
   // The app widgets each load their own data once authenticated.
-  loadCatalog(); loadOrders(); loadMetrics();
-  refreshTimer = setInterval(() => { loadOrders(); loadMetrics(); }, 4000);
+  loadCatalog(); loadOrders(); loadStats(); loadMetrics();
+  refreshTimer = setInterval(() => { loadOrders(); loadStats(); loadMetrics(); }, 4000);
 }
 
 function logout() {
@@ -280,6 +280,7 @@ async function order(productId, price) {
   });
   if (res.status === 401) { alert("Session expired. Please log in again."); logout(); return; }
   loadOrders();
+  loadStats();
   loadMetrics();
 }
 
@@ -296,21 +297,34 @@ async function loadOrders() {
     ).join("") + "</table>";
 }
 
-// --- Monitoring widget logic ---
+// --- Revenue scorecard + monitoring widget ---
+// Revenue and paid-order counts come from the ordering database (authoritative,
+// persistent); event/log/error counts come from the monitoring service.
+let lastStats = { revenue: 0, ordersPaid: 0 };
+let lastMetrics = { eventCount: 0, logCount: 0, errors: 0 };
+
+async function loadStats() {
+  const res = await fetch(GW + "/api/stats");
+  lastStats = await res.json();
+  document.getElementById("kpiRevenue").textContent = "€" + (lastStats.revenue || 0).toFixed(2);
+  document.getElementById("kpiOrders").textContent = lastStats.ordersPaid || 0;
+  renderMonitoring();
+}
+
 async function loadMetrics() {
   const res = await fetch(GW + "/api/metrics");
-  const m = await res.json();
-  // Revenue scorecard (KPIs).
-  document.getElementById("kpiRevenue").textContent = "€" + (m.revenue || 0).toFixed(2);
-  document.getElementById("kpiOrders").textContent = m.ordersPaid;
-  document.getElementById("kpiErrors").textContent = m.errors;
-  // Detailed monitoring widget.
+  lastMetrics = await res.json();
+  document.getElementById("kpiErrors").textContent = lastMetrics.errors || 0;
+  renderMonitoring();
+}
+
+function renderMonitoring() {
   document.getElementById("metrics").innerHTML =
-    `<div class="metric"><span>Revenue</span><b>&euro;${(m.revenue || 0).toFixed(2)}</b></div>
-     <div class="metric"><span>Orders paid</span><b>${m.ordersPaid}</b></div>
-     <div class="metric"><span>Events collected</span><b>${m.eventCount}</b></div>
-     <div class="metric"><span>Log entries</span><b>${m.logCount}</b></div>
-     <div class="metric"><span>Errors</span><b>${m.errors}</b></div>`;
+    `<div class="metric"><span>Revenue</span><b>&euro;${(lastStats.revenue || 0).toFixed(2)}</b></div>
+     <div class="metric"><span>Orders paid</span><b>${lastStats.ordersPaid || 0}</b></div>
+     <div class="metric"><span>Events collected</span><b>${lastMetrics.eventCount || 0}</b></div>
+     <div class="metric"><span>Log entries</span><b>${lastMetrics.logCount || 0}</b></div>
+     <div class="metric"><span>Errors</span><b>${lastMetrics.errors || 0}</b></div>`;
 }
 </script>
 </body>

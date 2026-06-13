@@ -149,6 +149,13 @@ def orders():
     return Response(body, status=status, mimetype="application/json")
 
 
+# --- Business stats (revenue, paid orders) from the ordering database ---
+@app.route("/api/stats")
+def stats():
+    body, status = proxy_get(ORDERING_URL + "/stats")
+    return Response(body, status=status, mimetype="application/json")
+
+
 # --- Monitoring routes (for the monitoring widget) ---
 @app.route("/api/metrics")
 def metrics():

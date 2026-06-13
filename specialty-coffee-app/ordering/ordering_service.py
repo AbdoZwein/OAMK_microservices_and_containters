@@ -121,6 +121,21 @@ def create_order():
     return jsonify({"orderId": order_id, "amount": amount, "status": new_status})
 
 
+@app.route("/stats")
+def stats():
+    """Revenue and paid-order count from this service's own database.
+
+    Sourced from the order database (not from ephemeral monitoring events), so
+    the figures are accurate and survive restarts.
+    """
+    con = sqlite3.connect(DB_PATH)
+    paid, revenue = con.execute(
+        "SELECT COUNT(*), COALESCE(SUM(amount), 0) FROM orders WHERE status='Paid'"
+    ).fetchone()
+    con.close()
+    return jsonify({"ordersPaid": paid, "revenue": round(revenue, 2)})
+
+
 @app.route("/orders")
 def list_orders():
     """Return recent orders (for the UI orders widget)."""
