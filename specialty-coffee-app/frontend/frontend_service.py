@@ -198,15 +198,17 @@ function logout() {
 function loggedIn() { return token !== null; }
 
 // --- Catalog widget logic ---
+let catalogItems = [];   // current products, looked up by id by the action buttons
+
 async function loadCatalog() {
   const res = await fetch(GW + "/api/products");
-  const items = await res.json();
-  const rows = items.map(p =>
+  catalogItems = await res.json();
+  const rows = catalogItems.map(p =>
     `<div class="product">
        <span>${p.name} &mdash; &euro;${p.price.toFixed(2)}</span>
        <span class="actions">
          <button onclick="order('${p.productId}', ${p.price})">Order</button>
-         <button class="secondary" onclick="editProduct('${p.productId}', ${JSON.stringify(p.name)}, ${p.price})">Edit</button>
+         <button class="secondary" onclick="editProduct('${p.productId}')">Edit</button>
          <button class="danger" onclick="deleteProduct('${p.productId}')">Delete</button>
        </span>
      </div>`
@@ -235,10 +237,12 @@ async function addProduct() {
   loadCatalog();
 }
 
-async function editProduct(productId, currentName, currentPrice) {
-  const name = prompt("Product name:", currentName);
+async function editProduct(productId) {
+  const current = catalogItems.find(p => p.productId === productId);
+  if (!current) return;
+  const name = prompt("Product name:", current.name);
   if (name === null) return;
-  const priceStr = prompt("Price (EUR):", currentPrice);
+  const priceStr = prompt("Price (EUR):", current.price);
   if (priceStr === null) return;
   const price = parseFloat(priceStr);
   if (!name.trim() || !(price > 0)) { alert("Enter a name and a positive price."); return; }
